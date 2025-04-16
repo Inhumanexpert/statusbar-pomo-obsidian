@@ -103,6 +103,15 @@ export class Timer {
 	}
 
 	async quitTimer(): Promise<void> {
+		if (this.mode === Mode.Pomo) {
+			const elapsedMillisecs = moment().diff(this.startTime);
+			const elapsedMinutes = Math.floor(elapsedMillisecs / MILLISECS_IN_MINUTE);
+
+			if (elapsedMinutes > 0 && this.plugin.settings.logging === true) {
+				await this.logPomo(elapsedMinutes);
+			}
+		}
+
 		this.mode = Mode.NoTimer;
 		this.startTime = moment(0);
 		this.endTime = moment(0);
@@ -113,7 +122,7 @@ export class Timer {
 			this.whiteNoisePlayer.stopWhiteNoise();
 		}
 
-		await this.plugin.loadSettings(); //why am I loading settings on quit? to ensure that when I restart everything is correct? seems weird
+		await this.plugin.loadSettings(); // Ensure settings are reloaded on quit
 	}
 
 	pauseTimer(): void {
@@ -261,9 +270,16 @@ export class Timer {
 
 
 	/**************  Logging  **************/
-	async logPomo(): Promise<void> {
+	async logPomo(incomplete? : number): Promise<void> {
 		var logText = moment().format(this.plugin.settings.logText);
 		const logFilePlaceholder = "{{logFile}}";
+
+		if(incomplete){
+			logText = logText.replace("{{XX}}", String(incomplete));
+		}
+		else {
+			logText = logText.replace("{{XX}}", String(this.plugin.settings.pomo));
+		}
 
 		if (this.plugin.settings.logActiveNote === true) {
 			let linkText = this.plugin.app.fileManager.generateMarkdownLink(this.activeNote, '');
