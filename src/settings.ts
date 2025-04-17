@@ -19,6 +19,8 @@ export interface PomoSettings {
 	logging: boolean;
 	logFile: string;
 	logText: string;
+	apiEndpoint: string;
+	apiKey: string;
 	logToDaily: boolean;
 	logActiveNote: boolean;
 	fancyStatusBar: boolean;
@@ -39,6 +41,8 @@ export const DEFAULT_SETTINGS: PomoSettings = {
 	backgroundNoiseFile: "",
 	logging: false,
 	logFile: "Pomodoro Log.md",
+	apiEndpoint: "",
+	apiKey: "",
 	logToDaily: false,
 	logText: "[🍅] dddd, MMMM DD YYYY, h:mm A",
 	logActiveNote: false,
@@ -226,6 +230,25 @@ export class PomoSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.logFile.toString())
 					.onChange(value => {
 						this.plugin.settings.logFile = value;
+						this.plugin.saveSettings();
+					}));
+
+			new Setting(containerEl)
+				.setName("Api endpoint")
+				.setDesc("Endpoint to send log data to.")
+				.addText(text => text
+					.setValue(this.plugin.settings.apiEndpoint.toString())
+					.onChange(value => {
+						this.plugin.settings.apiEndpoint = value;
+						this.plugin.saveSettings();
+					}));
+			new Setting(containerEl)
+				.setName("Api key")
+				.setDesc("Key for pixela api.")
+				.addText(text => text
+					.setValue(this.plugin.settings.apiKey.toString())
+					.onChange(value => {
+						this.plugin.settings.apiKey = value;
 						this.plugin.saveSettings();
 					}));
 

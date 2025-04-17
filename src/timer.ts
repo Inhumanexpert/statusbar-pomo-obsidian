@@ -1,5 +1,6 @@
 import { Notice, moment, TFolder, TFile } from 'obsidian';
 import { notificationUrl, whiteNoiseUrl } from './audio_urls';
+import axios, { AxiosResponse } from 'axios';
 import { WhiteNoise } from './white_noise';
 import PomoTimerPlugin from './main';
 
@@ -12,6 +13,14 @@ export const enum Mode {
 	ShortBreak,
 	LongBreak,
 	NoTimer
+}
+
+interface PixelParams {
+  [key: string]: any; // Adjust the type based on your actual pixel parameters
+}
+
+interface Headers {
+  [key: string]: string; // Adjust the type based on your actual headers
 }
 
 
@@ -107,8 +116,8 @@ export class Timer {
 			const elapsedMillisecs = moment().diff(this.startTime);
 			const elapsedMinutes = Math.floor(elapsedMillisecs / MILLISECS_IN_MINUTE);
 
-			if (elapsedMinutes > 0 && this.plugin.settings.logging === true) {
-				await this.logPomo(elapsedMinutes);
+			if (elapsedMinutes > 0 && elapsedMinutes !== this.plugin.settings.pomo && this.plugin.settings.logging === true) {
+				await this.logPomoUnfinished(elapsedMinutes);
 			}
 		}
 
@@ -270,15 +279,47 @@ export class Timer {
 
 
 	/**************  Logging  **************/
-	async logPomo(incomplete? : number): Promise<void> {
+	async logPomo(): Promise<void> {
+		var logText = moment().format(this.plugin.settings.logText);
+		const logFilePlaceholder = "{{logFile}}";
+		logText = logText.replace("XX", String(this.plugin.settings.pomo));
+		
+		if (this.plugin.settings.logActiveNote === true) {
+			let linkText = this.plugin.app.fileManager.generateMarkdownLink(this.activeNote, '');
+			if (logText.includes(logFilePlaceholder)) {
+				logText = logText.replace(logFilePlaceholder, linkText);
+			} else {
+				logText = logText + " " + linkText;
+			}
+
+			logText = logText.replace(String.raw`\n`, "\n");
+		}
+
+		if (this.plugin.settings.logToDaily === true) { //use today's note
+			let file = (await this.plugin.getDailyNoteFile()).path;
+			await this.appendFile(file, logText);
+		} else { //use file given in settings
+			let file = this.plugin.app.vault.getAbstractFileByPath(this.plugin.settings.logFile);
+
+			if (!file || file !instanceof TFolder) { //if no file, create
+				console.log("Creating pomodoro log file");
+				await this.plugin.app.vault.create(this.plugin.settings.logFile, "");
+			}
+
+			await this.appendFile(this.plugin.settings.logFile, logText);
+		}
+		await this.postPixelData(this.plugin.settings.apiEndpoint, this.plugin.settings.pomo);
+	}
+
+	async logPomoUnfinished(incomplete : number): Promise<void> {
 		var logText = moment().format(this.plugin.settings.logText);
 		const logFilePlaceholder = "{{logFile}}";
 
-		if(incomplete){
-			logText = logText.replace("{{XX}}", String(incomplete));
+		if(incomplete !== undefined) {
+			logText = logText.replace("XX", String(incomplete));
 		}
 		else {
-			logText = logText.replace("{{XX}}", String(this.plugin.settings.pomo));
+			logText = logText.replace("XX", String(this.plugin.settings.pomo));
 		}
 
 		if (this.plugin.settings.logActiveNote === true) {
@@ -305,7 +346,25 @@ export class Timer {
 
 			await this.appendFile(this.plugin.settings.logFile, logText);
 		}
+		await this.postPixelData(this.plugin.settings.apiEndpoint, incomplete);
 	}
+
+	/*************API***************/
+
+	postPixelData(
+		pixelEndpoint: string,
+		time: number
+	  ) { // Adjust the <any> to a more specific type if you know the response structure
+		try {
+			let pixel_params = {"quantity": String(time)}
+		  	axios.put(pixelEndpoint, pixel_params, {
+			headers: {"X-USER-TOKEN": this.plugin.settings.apiKey},
+		  });
+		} catch (error: any) {
+		  console.error('Error sending POST request:', error);
+		  throw error; // Re-throw the error to be handled by the caller
+		}
+	  }
 
 	//from Note Refactor plugin by James Lynch, https://github.com/lynchjames/note-refactor-obsidian/blob/80c1a23a1352b5d22c70f1b1d915b4e0a1b2b33f/src/obsidian-file.ts#L69
 	async appendFile(filePath: string, logText: string): Promise<void> {
